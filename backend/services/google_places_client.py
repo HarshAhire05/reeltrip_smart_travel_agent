@@ -114,7 +114,7 @@ async def nearby_search(
             return []
 
 
-async def get_photo_url(photo_name: str, max_width: int = 800) -> str | None:
+def get_photo_url(photo_name: str, max_width: int = 800) -> str | None:
     """
     Get a displayable photo URL from a Google Places photo reference.
 

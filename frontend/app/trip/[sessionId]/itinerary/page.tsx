@@ -11,6 +11,7 @@ import { ReservationsTab } from "@/components/itinerary/ReservationsTab";
 import { DayTimeline } from "@/components/itinerary/DayTimeline";
 import { MiscellaneousTab } from "@/components/itinerary/MiscellaneousTab";
 import { CustomizeChat } from "@/components/itinerary/CustomizeChat";
+import { EditTripPanelContainer } from "@/components/itinerary/EditTripPanelContainer";
 import { useStore } from "@/lib/store";
 import { API_BASE } from "@/lib/api";
 
@@ -161,6 +162,9 @@ export default function ItineraryPage() {
 
       {/* Customize chat overlay */}
       <CustomizeChat />
+
+      {/* Edit Trip Details Panel */}
+      <EditTripPanelContainer />
     </div>
   );
 }

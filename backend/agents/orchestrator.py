@@ -108,31 +108,57 @@ async def run_travel_planner(state: TravelPlannerState) -> TravelPlannerState:
     return state
 
 
-async def run_travel_planner_streaming(state: TravelPlannerState) -> AsyncGenerator[dict, None]:
+async def run_travel_planner_streaming(
+    state: TravelPlannerState,
+    skip_agents: list[str] | None = None
+) -> AsyncGenerator[dict, None]:
     """
     Run all agents with SSE progress events.
     Yields dicts with {"event": "...", "data": {...}} for SSE streaming.
+    
+    Args:
+        state: TravelPlannerState containing all planning data
+        skip_agents: Optional list of agent names to skip (for re-plan feature)
+                     If provided, skipped agents will use existing data from state
     """
     logger.info(f"Agent orchestrator (streaming): selected_cities={state.get('selected_cities', [])}")
     state["agent_errors"] = state.get("agent_errors", [])
     state["progress_updates"] = state.get("progress_updates", [])
+    
+    # Initialize skip list
+    skip_agents = skip_agents or []
+    logger.info(f"Skipping agents: {skip_agents}")
 
     # --- BATCH 1 ---
-    yield {"event": "agent_progress", "data": {"agent": "flight", "status": "working", "message": "Searching for flights..."}}
-    yield {"event": "agent_progress", "data": {"agent": "hotel", "status": "working", "message": "Finding hotels..."}}
-    yield {"event": "agent_progress", "data": {"agent": "weather", "status": "working", "message": "Checking weather..."}}
-    yield {"event": "agent_progress", "data": {"agent": "safety", "status": "working", "message": "Reviewing safety..."}}
+    batch1_tasks = []
+    batch1_keys = []
+    batch1_names = []
+    
+    for agent_name, agent_key, agent_func in [
+        ("flight", "flight_data", run_flight_agent),
+        ("hotel", "hotel_data", run_hotel_agent),
+        ("weather", "weather_data", run_weather_agent),
+        ("safety", "safety_data", run_safety_agent),
+    ]:
+        if agent_name in skip_agents:
+            # Skip this agent - use existing data
+            yield {"event": "agent_progress", "data": {"agent": agent_name, "status": "skipped", "message": f"{agent_name.title()} unchanged (no impact from your edits)"}}
+            logger.info(f"Skipping {agent_name} agent - using existing data")
+        else:
+            # Run this agent
+            yield {"event": "agent_progress", "data": {"agent": agent_name, "status": "working", "message": f"Re-selecting {agent_name}..." if skip_agents else f"Searching for {agent_name}..."}}
+            batch1_tasks.append(agent_func(state))
+            batch1_keys.append(agent_key)
+            batch1_names.append(agent_name)
+    
+    # Execute batch 1 agents that aren't skipped
+    if batch1_tasks:
+        results = await asyncio.gather(*batch1_tasks, return_exceptions=True)
+    else:
+        results = []
 
-    results = await asyncio.gather(
-        run_flight_agent(state),
-        run_hotel_agent(state),
-        run_weather_agent(state),
-        run_safety_agent(state),
-        return_exceptions=True,
-    )
-
-    agent_keys = ["flight_data", "hotel_data", "weather_data", "safety_data"]
-    for i, (key, name) in enumerate(zip(agent_keys, BATCH_1_AGENTS)):
+    # Process results for batch 1
+    for i, (key, name) in enumerate(zip(batch1_keys, batch1_names)):
         if isinstance(results[i], Exception):
             logger.error(f"{name} agent failed: {results[i]}")
             state["agent_errors"].append(f"{name}: {str(results[i])}")
@@ -143,17 +169,33 @@ async def run_travel_planner_streaming(state: TravelPlannerState) -> AsyncGenera
             yield {"event": "agent_progress", "data": {"agent": name, "status": "complete", "message": f"{name.title()} research complete"}}
 
     # --- BATCH 2 ---
-    yield {"event": "agent_progress", "data": {"agent": "activity", "status": "working", "message": "Planning activities..."}}
-    yield {"event": "agent_progress", "data": {"agent": "transport", "status": "working", "message": "Researching transportation..."}}
+    batch2_tasks = []
+    batch2_keys = []
+    batch2_names = []
+    
+    for agent_name, agent_key, agent_func in [
+        ("activity", "activity_data", run_activity_agent),
+        ("transport", "transport_data", run_transport_agent),
+    ]:
+        if agent_name in skip_agents:
+            # Skip this agent - use existing data
+            yield {"event": "agent_progress", "data": {"agent": agent_name, "status": "skipped", "message": f"{agent_name.title()} unchanged (no impact from your edits)"}}
+            logger.info(f"Skipping {agent_name} agent - using existing data")
+        else:
+            # Run this agent
+            yield {"event": "agent_progress", "data": {"agent": agent_name, "status": "working", "message": f"Re-planning {agent_name}..." if skip_agents else f"Planning {agent_name}..."}}
+            batch2_tasks.append(agent_func(state))
+            batch2_keys.append(agent_key)
+            batch2_names.append(agent_name)
+    
+    # Execute batch 2 agents that aren't skipped
+    if batch2_tasks:
+        results2 = await asyncio.gather(*batch2_tasks, return_exceptions=True)
+    else:
+        results2 = []
 
-    results2 = await asyncio.gather(
-        run_activity_agent(state),
-        run_transport_agent(state),
-        return_exceptions=True,
-    )
-
-    agent_keys2 = ["activity_data", "transport_data"]
-    for i, (key, name) in enumerate(zip(agent_keys2, BATCH_2_AGENTS)):
+    # Process results for batch 2
+    for i, (key, name) in enumerate(zip(batch2_keys, batch2_names)):
         if isinstance(results2[i], Exception):
             logger.error(f"{name} agent failed: {results2[i]}")
             state["agent_errors"].append(f"{name}: {str(results2[i])}")
@@ -164,18 +206,24 @@ async def run_travel_planner_streaming(state: TravelPlannerState) -> AsyncGenera
             yield {"event": "agent_progress", "data": {"agent": name, "status": "complete", "message": f"{name.title()} planning complete"}}
 
     # --- BUDGET ---
-    yield {"event": "agent_progress", "data": {"agent": "budget", "status": "working", "message": "Optimizing budget..."}}
-    try:
-        state["budget_analysis"] = await run_budget_agent(state)
-        yield {"event": "agent_progress", "data": {"agent": "budget", "status": "complete", "message": "Budget analysis complete"}}
-    except Exception as e:
-        logger.error(f"Budget agent failed: {e}")
-        state["agent_errors"].append(f"budget: {str(e)}")
-        state["budget_analysis"] = None
-        yield {"event": "agent_progress", "data": {"agent": "budget", "status": "failed", "message": "Budget analysis encountered an issue"}}
+    # Budget agent almost always runs (unless skipped explicitly)
+    if "budget" in skip_agents:
+        yield {"event": "agent_progress", "data": {"agent": "budget", "status": "skipped", "message": "Budget unchanged"}}
+        logger.info("Skipping budget agent - using existing data")
+    else:
+        yield {"event": "agent_progress", "data": {"agent": "budget", "status": "working", "message": "Re-calculating budget..." if skip_agents else "Optimizing budget..."}}
+        try:
+            state["budget_analysis"] = await run_budget_agent(state)
+            yield {"event": "agent_progress", "data": {"agent": "budget", "status": "complete", "message": "Budget analysis complete"}}
+        except Exception as e:
+            logger.error(f"Budget agent failed: {e}")
+            state["agent_errors"].append(f"budget: {str(e)}")
+            state["budget_analysis"] = None
+            yield {"event": "agent_progress", "data": {"agent": "budget", "status": "failed", "message": "Budget analysis encountered an issue"}}
 
     # --- ASSEMBLY ---
-    yield {"event": "agent_progress", "data": {"agent": "assembler", "status": "working", "message": "Assembling your itinerary..."}}
+    # Assembler ALWAYS runs to ensure coherence (never skipped)
+    yield {"event": "agent_progress", "data": {"agent": "assembler", "status": "working", "message": "Merging your updated itinerary..." if skip_agents else "Assembling your itinerary..."}}
     try:
         state["itinerary"] = await run_assembler(state)
         if state["itinerary"]:

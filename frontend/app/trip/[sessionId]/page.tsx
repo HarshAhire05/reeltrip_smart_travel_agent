@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ProgressTracker } from "@/components/processing/ProgressTracker";
 import { VideoPreview } from "@/components/processing/VideoPreview";
 import { LocationCard } from "@/components/processing/LocationCard";
+import { ClarificationCard } from "@/components/processing/ClarificationCard";
 import { HighlightsSheet } from "@/components/highlights/HighlightsSheet";
 import { BucketListSelector } from "@/components/highlights/BucketListSelector";
 import { PreferenceForm } from "@/components/preferences/PreferenceForm";
@@ -16,7 +17,12 @@ import { GenerationProgress } from "@/components/preferences/GenerationProgress"
 import { useStore } from "@/lib/store";
 import { streamPost } from "@/lib/sse";
 import { API_BASE } from "@/lib/api";
-import type { AnalysisEvent, HighlightsEvent } from "@/lib/types";
+import type {
+  AnalysisEvent,
+  HighlightsEvent,
+  IntentClassification,
+  ClarificationOption,
+} from "@/lib/types";
 
 export default function TripPage() {
   const router = useRouter();
@@ -35,6 +41,10 @@ export default function TripPage() {
     sessionId,
     preferences,
     selectedCities,
+    inputMode, // NEW: Track input mode
+    textInput, // NEW: Text input
+    needsClarification, // NEW: Clarification needed
+    clarificationOptions, // NEW: Clarification options
     setError,
     reset,
     setFlowStep,
@@ -43,33 +53,53 @@ export default function TripPage() {
     updateAgentStatus,
     setItinerary,
     setItineraryId,
+    setIntentClassification, // NEW
+    setClarificationOptions, // NEW
   } = useStore();
 
-  console.log("[TripPage] Render — url:", useStore.getState().url, "flowStep:", flowStep);
+  console.log(
+    "[TripPage] Render — inputMode:",
+    inputMode,
+    "flowStep:",
+    flowStep,
+  );
 
-  // Video processing SSE
+  // Processing SSE - handles both URL and text modes
   useEffect(() => {
     const videoUrl = useStore.getState().url;
-    if (!videoUrl) {
+    const userTextInput = useStore.getState().textInput;
+    const mode = useStore.getState().inputMode;
+
+    // Redirect if no input
+    if (!videoUrl && !userTextInput) {
       router.push("/");
       return;
     }
 
-    console.log("[TripPage] Starting pipeline for:", videoUrl);
+    console.log("[TripPage] Starting pipeline for mode:", mode);
     const abortController = new AbortController();
     processingAbortRef.current = abortController;
 
     const store = useStore.getState;
 
+    // Determine which endpoint to call based on input mode
+    const endpoint =
+      mode === "text"
+        ? `${API_BASE}/api/v1/process-text`
+        : `${API_BASE}/api/v1/process`;
+
+    const requestBody =
+      mode === "text" ? { text: userTextInput } : { url: videoUrl };
+
     streamPost(
-      `${API_BASE}/api/v1/process`,
-      { url: videoUrl },
+      endpoint,
+      requestBody,
       (event) => {
         console.log("[TripPage] SSE event received:", event.event);
         switch (event.event) {
           case "session":
             store().startProcessing(
-              (event.data as { session_id: string }).session_id
+              (event.data as { session_id: string }).session_id,
             );
             break;
           case "progress": {
@@ -82,17 +112,43 @@ export default function TripPage() {
             break;
           }
           case "metadata":
-            store().setMetadata(
-              event.data as {
-                title: string;
-                thumbnail_url: string;
-                platform: string;
-                duration: number;
-              }
-            );
+            // Only for URL mode
+            if (mode === "url") {
+              store().setMetadata(
+                event.data as {
+                  title: string;
+                  thumbnail_url: string;
+                  platform: string;
+                  duration: number;
+                },
+              );
+            }
             break;
           case "analysis":
-            store().setAnalysis(event.data as AnalysisEvent);
+            // Only for URL mode
+            if (mode === "url") {
+              store().setAnalysis(event.data as AnalysisEvent);
+            }
+            break;
+          case "intent_analysis":
+            // Only for text mode
+            if (mode === "text") {
+              store().setIntentClassification(
+                event.data as IntentClassification,
+              );
+            }
+            break;
+          case "clarification_needed":
+            // Text mode clarification
+            if (mode === "text") {
+              const data = event.data as {
+                message: string;
+                options: ClarificationOption[];
+              };
+              store().setClarificationOptions(data.options);
+              // TODO: Show clarification UI
+              console.log("Clarification needed:", data.message, data.options);
+            }
             break;
           case "highlights":
             store().setHighlights(event.data as HighlightsEvent);
@@ -110,7 +166,7 @@ export default function TripPage() {
         useStore.getState().setError(err.message);
       },
       undefined,
-      abortController.signal
+      abortController.signal,
     );
 
     return () => {
@@ -147,21 +203,21 @@ export default function TripPage() {
                 agent: string;
                 status: "working" | "complete" | "failed";
                 message: string;
-              }
+              },
             );
             break;
           case "itinerary":
-            setItinerary(
-              event.data as Parameters<typeof setItinerary>[0]
-            );
+            setItinerary(event.data as Parameters<typeof setItinerary>[0]);
             break;
           case "complete": {
             const d = event.data as {
               itinerary_id: string;
               session_id: string;
             };
+            console.log("[TripPage] Complete event received, itinerary_id:", d.itinerary_id);
             setItineraryId(d.itinerary_id);
             setIsGenerating(false);
+            console.log("[TripPage] Itinerary ID set, flowStep should remain:", useStore.getState().flowStep);
             break;
           }
           case "error":
@@ -175,7 +231,7 @@ export default function TripPage() {
         setIsGenerating(false);
       },
       undefined,
-      abortController.signal
+      abortController.signal,
     );
   }, [
     sessionId,
@@ -198,8 +254,24 @@ export default function TripPage() {
 
   const handleRetry = () => {
     const savedUrl = useStore.getState().url;
+    const savedText = useStore.getState().textInput;
+    const mode = useStore.getState().inputMode;
     reset();
-    useStore.getState().setUrl(savedUrl);
+    if (mode === "url") {
+      useStore.getState().setUrl(savedUrl);
+    } else {
+      useStore.getState().setTextInput(savedText);
+    }
+    useStore.getState().setInputMode(mode);
+    router.push(`/trip/${crypto.randomUUID()}`);
+  };
+
+  const handleClarificationSelect = async (destination: string) => {
+    // User selected a destination - restart processing with refined text
+    const store = useStore.getState();
+    store.reset();
+    store.setTextInput(`I want to visit ${destination}`);
+    store.setInputMode("text");
     router.push(`/trip/${crypto.randomUUID()}`);
   };
 
@@ -245,11 +317,21 @@ export default function TripPage() {
           </motion.div>
         )}
 
+        {/* Clarification needed (text mode only) */}
+        {needsClarification && clarificationOptions.length > 0 && !error && (
+          <ClarificationCard
+            message="Which destination sounds right for you?"
+            options={clarificationOptions}
+            onSelect={handleClarificationSelect}
+          />
+        )}
+
         {/* Processing / highlights state */}
-        {showProcessingUI && !error && (
+        {showProcessingUI && !error && !needsClarification && (
           <>
             {(isProcessing || stage === "idle") && <ProgressTracker />}
-            {videoTitle && <VideoPreview />}
+            {/* Only show video preview in URL mode */}
+            {inputMode === "url" && videoTitle && <VideoPreview />}
             {destinationCity && <LocationCard />}
             {stage === "complete" && highlights.length === 0 && (
               <motion.div

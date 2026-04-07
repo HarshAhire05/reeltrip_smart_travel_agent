@@ -17,6 +17,92 @@ export interface PlaceHighlight {
   source: string;
 }
 
+// --- Text Input Types ---
+
+export type InputMode = "url" | "text";
+
+export type IntentType =
+  | "SPECIFIC_DESTINATION"
+  | "EXPERIENCE_BASED"
+  | "THEME_BASED"
+  | "MULTI_DESTINATION"
+  | "NON_TRAVEL";
+
+export interface DestinationInfo {
+  primary: string;
+  country: string;
+  region: string;
+  secondary: string[];
+}
+
+export interface IntentClassification {
+  intent_type: IntentType;
+  destination: DestinationInfo;
+  travel_theme: string;
+  confidence: "high" | "medium" | "low";
+  needs_clarification: boolean;
+  clarification_options: string[];
+  clarification_message: string;
+  error_message: string;
+}
+
+export interface ClarificationOption {
+  destination_name: string;
+  country: string;
+  region: string;
+  description: string;
+  image_url: string | null;
+}
+
+export interface TextInputRequest {
+  text: string;
+  session_id?: string;
+}
+
+export interface TextProcessingResult {
+  session_id: string;
+  input_mode: "text";
+  raw_text_input: string;
+  intent_classification: IntentClassification;
+  primary_destination: {
+    country: string;
+    region: string;
+    city: string;
+  };
+  primary_country: string;
+  primary_region: string;
+  primary_city: string;
+  city_latitude: number | null;
+  city_longitude: number | null;
+  highlights: PlaceHighlight[];
+  highlights_summary: string;
+  processed_at: string;
+  travel_theme: string;
+  needs_clarification: boolean;
+  clarification_options: ClarificationOption[];
+}
+
+// --- Text Processing Events (SSE) ---
+
+export interface IntentAnalysisEvent {
+  intent_type: IntentType;
+  destination: DestinationInfo;
+  travel_theme: string;
+  needs_clarification: boolean;
+  clarification_options: ClarificationOption[];
+}
+
+export interface TextHighlightsEvent {
+  highlights: PlaceHighlight[];
+  highlights_summary: string;
+  primary_city: string;
+  primary_country: string;
+  city_latitude: number;
+  city_longitude: number;
+}
+
+// ---
+
 export interface CandidateLocation {
   name: string;
   type: string;

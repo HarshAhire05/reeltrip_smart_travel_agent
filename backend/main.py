@@ -6,8 +6,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from config import get_settings
 from models.api import HealthResponse
+from models.text_input import TextInputRequest
+from models.preferences import UserPreferences
+from models.itinerary import TripItinerary
+from models.replan import ReplanRequest
 from pipeline.orchestrator import run_pipeline
+from pipeline.text_processor import TextProcessor
 from agents.orchestrator import run_travel_planner_streaming
+from agents.replan_orchestrator import run_replan_orchestrator
 from agents.state import TravelPlannerState
 from services.supabase_client import (
     get_session, get_cached_location, update_session,
@@ -16,6 +22,7 @@ from services.supabase_client import (
 from services.openai_client import call_openai_json
 import json
 import logging
+import uuid
 
 # Configure logging
 logging.basicConfig(
@@ -71,6 +78,54 @@ async def process_video(request: Request):
         except Exception as e:
             yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
 
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.post("/api/v1/process-text")
+async def process_text_input(request: Request):
+    """
+    Process text-based travel intent (alternative to video processing).
+    Returns SSE stream with progress events and highlights.
+    
+    Body: {"text": "I want to visit Dubai", "session_id": "optional-uuid"}
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"error": "Invalid JSON body"})
+    
+    text_input = body.get("text", "").strip()
+    session_id = body.get("session_id") or str(uuid.uuid4())
+    
+    if not text_input:
+        return JSONResponse(status_code=400, content={"error": "text is required"})
+    
+    if len(text_input) < 3:
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Please provide a more detailed travel description"}
+        )
+    
+    # Initialize text processor
+    text_processor = TextProcessor()
+    
+    async def event_stream():
+        try:
+            # Stream SSE events from text processor
+            async for event_str in text_processor.process_stream(text_input, session_id):
+                yield event_str
+        except Exception as e:
+            logger.error(f"Text processing stream error: {e}", exc_info=True)
+            yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
+    
     return StreamingResponse(
         event_stream(),
         media_type="text/event-stream",
@@ -141,17 +196,25 @@ async def create_itinerary(request: Request):
     # Load session to get the video URL
     session = await get_session(session_id)
     if not session:
-        return JSONResponse(status_code=404, content={"error": "Session not found"})
-
-    url = session.get("url", "")
+        # If Supabase is down, allow the request to proceed without session data
+        # The agents can still work with just preferences and selected_cities
+        logger.warning(f"Could not load session {session_id}, proceeding without session data")
+        url = ""
+    else:
+        url = session.get("url", "")
 
     # Load cached location result
     location_result = await get_cached_location(url) if url else None
     if not location_result:
-        return JSONResponse(
-            status_code=400,
-            content={"error": "No location data found. Please process a video first."},
-        )
+        # Create a minimal location result if cache is unavailable
+        logger.warning("No location data found, creating minimal location context")
+        location_result = {
+            "primary_city": selected_cities[0] if selected_cities else "Unknown",
+            "primary_country": "Unknown",
+            "city_latitude": 0.0,
+            "city_longitude": 0.0,
+            "highlights": []
+        }
 
     # Parse highlights
     highlights = location_result.get("highlights", [])
@@ -197,23 +260,39 @@ async def create_itinerary(request: Request):
                 event_data = json.dumps(event.get("data", {}))
                 yield f"event: {event_name}\ndata: {event_data}\n\n"
 
-                # If itinerary was generated, store it
+                # If itinerary was generated, try to store it
                 if event_name == "itinerary" and event.get("data"):
-                    itinerary_id = await store_itinerary({
-                        "url": url,
-                        "session_id": session_id,
-                        "user_preferences": preferences,
-                        "selected_cities": selected_cities,
-                        "itinerary": event["data"],
-                    })
-                    if itinerary_id:
-                        await update_session(session_id, {
-                            "itinerary_id": itinerary_id,
-                            "stage": "itinerary",
+                    try:
+                        stored_id = await store_itinerary({
+                            "url": url,
+                            "session_id": session_id,
+                            "user_preferences": preferences,
+                            "selected_cities": selected_cities,
+                            "itinerary": event["data"],
                         })
+                        if stored_id:
+                            itinerary_id = stored_id
+                            await update_session(session_id, {
+                                "itinerary_id": itinerary_id,
+                                "stage": "itinerary",
+                            })
+                            logger.info(f"Stored itinerary with ID: {itinerary_id}")
+                    except Exception as e:
+                        # Storage failed but don't block the response
+                        logger.warning(f"Could not store itinerary (Supabase unavailable): {e}")
+                        # Generate a temporary ID so the frontend can still work
+                        itinerary_id = f"temp-{session_id}"
+                        logger.info(f"Using temporary itinerary ID: {itinerary_id}")
 
-            # Send completion event
-            yield f"event: complete\ndata: {json.dumps({'itinerary_id': itinerary_id, 'session_id': session_id})}\n\n"
+            # ALWAYS send completion event even if storage failed
+            # Ensure itinerary_id is never None
+            final_itinerary_id = itinerary_id if itinerary_id else f"temp-{session_id}"
+            completion_data = {
+                "itinerary_id": final_itinerary_id,
+                "session_id": session_id
+            }
+            yield f"event: complete\ndata: {json.dumps(completion_data)}\n\n"
+            logger.info(f"Itinerary generation complete for session {session_id}, itinerary_id: {final_itinerary_id}")
 
         except Exception as e:
             logger.error(f"Itinerary generation error: {e}")
@@ -314,6 +393,162 @@ Maintain the exact same schema structure."""
         else:
             yield f"event: error\ndata: {json.dumps({'message': 'Could not process your customization request. Please try again.'})}\n\n"
 
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.post("/api/v1/itinerary/replan")
+async def replan_itinerary(request: Request):
+    """
+    Re-plan an existing itinerary by selectively re-running agents based on changed fields.
+    Returns SSE stream with agent progress events and updated itinerary.
+    
+    Body: {
+        "session_id": "...",
+        "original_params": {...UserPreferences...},
+        "updated_params": {...UserPreferences...},
+        "changed_fields": ["total_budget", "accommodation_tier"],
+        "existing_itinerary": {...TripItinerary...},
+        "selected_cities": [...]
+    }
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"error": "Invalid JSON body"})
+    
+    session_id = body.get("session_id", "").strip()
+    original_params_dict = body.get("original_params", {})
+    updated_params_dict = body.get("updated_params", {})
+    changed_fields = body.get("changed_fields", [])
+    existing_itinerary_dict = body.get("existing_itinerary", {})
+    selected_cities = body.get("selected_cities", [])
+    
+    # Validation
+    if not session_id:
+        return JSONResponse(status_code=400, content={"error": "session_id is required"})
+    if not updated_params_dict:
+        return JSONResponse(status_code=400, content={"error": "updated_params is required"})
+    if not existing_itinerary_dict:
+        return JSONResponse(status_code=400, content={"error": "existing_itinerary is required"})
+    if not changed_fields:
+        return JSONResponse(status_code=400, content={"error": "changed_fields is required (must specify what changed)"})
+    
+    # Parse Pydantic models
+    try:
+        original_params = UserPreferences(**original_params_dict)
+        updated_params = UserPreferences(**updated_params_dict)
+        existing_itinerary = TripItinerary(**existing_itinerary_dict)
+    except Exception as e:
+        logger.error(f"Failed to parse re-plan request: {e}")
+        return JSONResponse(status_code=400, content={"error": f"Invalid data format: {str(e)}"})
+    
+    # Load session to get location data
+    session = await get_session(session_id)
+    if not session:
+        logger.warning(f"Could not load session {session_id} for re-plan, using provided data only")
+        url = ""
+    else:
+        url = session.get("url", "")
+    
+    # Load cached location result (needed for agent context)
+    location_result = await get_cached_location(url) if url else None
+    if not location_result:
+        # Create minimal location context if unavailable
+        logger.warning("No location data found for re-plan, creating minimal context")
+        location_result = {
+            "primary_city": selected_cities[0] if selected_cities else existing_itinerary.destination_cities[0] if existing_itinerary.destination_cities else "Unknown",
+            "primary_country": existing_itinerary.destination_country or "Unknown",
+            "city_latitude": 0.0,
+            "city_longitude": 0.0,
+            "highlights": []
+        }
+    
+    # Parse highlights
+    highlights = location_result.get("highlights", [])
+    if isinstance(highlights, str):
+        highlights = json.loads(highlights)
+    
+    # If no selected_cities provided, extract from existing itinerary
+    if not selected_cities:
+        selected_cities = existing_itinerary.destination_cities or []
+    
+    # Get current itinerary version (handle None session gracefully)
+    current_itinerary_id = session.get("itinerary_id") if session else None
+    current_version = 1
+    if current_itinerary_id:
+        try:
+            current_record = await get_itinerary(current_itinerary_id)
+            if current_record:
+                current_version = current_record.get("version", 1)
+        except Exception as e:
+            logger.warning(f"Could not fetch itinerary version: {e}")
+    
+    logger.info(f"Re-plan request for session {session_id}: changed_fields={changed_fields}, current_version={current_version}")
+    
+    async def event_stream():
+        itinerary_id = None
+        new_version = current_version + 1
+        
+        try:
+            async for event in run_replan_orchestrator(
+                session_id=session_id,
+                original_params=original_params,
+                updated_params=updated_params,
+                changed_fields=changed_fields,
+                existing_itinerary=existing_itinerary,
+                location_result=location_result,
+                highlights=highlights,
+                selected_cities=selected_cities,
+            ):
+                event_name = event.get("event", "message")
+                event_data = event.get("data", {})
+                
+                # If this is the itinerary event, store it
+                if event_name == "itinerary" and event_data.get("itinerary"):
+                    # Update version in the data
+                    event_data["version"] = new_version
+                    
+                    # Try to store updated itinerary in Supabase
+                    try:
+                        itinerary_id = await store_itinerary({
+                            "url": url,
+                            "session_id": session_id,
+                            "user_preferences": updated_params.model_dump(),
+                            "selected_cities": selected_cities,
+                            "itinerary": event_data["itinerary"],
+                            "version": new_version,
+                        })
+                        
+                        if itinerary_id:
+                            await update_session(session_id, {
+                                "itinerary_id": itinerary_id,
+                                "preferences": json.dumps(updated_params.model_dump()),
+                                "stage": "itinerary",
+                            })
+                    except Exception as e:
+                        # Storage failed but don't block the response
+                        logger.warning(f"Could not store re-planned itinerary (Supabase unavailable): {e}")
+                        # Generate a temporary ID so the frontend can still work
+                        itinerary_id = f"temp-replan-{session_id}-v{new_version}"
+                
+                # Stream event to frontend
+                yield f"event: {event_name}\ndata: {json.dumps(event_data)}\n\n"
+            
+            # Send completion event
+            yield f"event: complete\ndata: {json.dumps({'itinerary_id': itinerary_id, 'session_id': session_id, 'version': new_version})}\n\n"
+        
+        except Exception as e:
+            logger.error(f"Re-plan error: {e}", exc_info=True)
+            yield f"event: error\ndata: {json.dumps({'message': f'Re-plan failed: {str(e)}'})}\n\n"
+    
     return StreamingResponse(
         event_stream(),
         media_type="text/event-stream",

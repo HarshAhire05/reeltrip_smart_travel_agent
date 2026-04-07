@@ -35,11 +35,22 @@ export function GenerationProgress() {
 
   const completedCount = useMemo(
     () => agentStatuses.filter((a) => a.status === "complete").length,
-    [agentStatuses]
+    [agentStatuses],
   );
 
   const progressPercent = Math.round((completedCount / AGENTS.length) * 100);
   const isComplete = completedCount === AGENTS.length && itineraryId;
+
+  console.log("[GenerationProgress] Render:", {
+    completedCount,
+    totalAgents: AGENTS.length,
+    itineraryId,
+    isComplete,
+    agentStatuses: agentStatuses.map((a) => ({
+      agent: a.agent,
+      status: a.status,
+    })),
+  });
 
   const getStatus = (agentKey: string) => {
     return agentStatuses.find((a) => a.agent === agentKey);

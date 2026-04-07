@@ -18,3 +18,7 @@ class UserPreferences(BaseModel):
     additional_notes: str = ""  # Free text special requests
     home_city: str = "Mumbai"  # For flight routing
     home_country: str = "India"  # For visa requirements
+    
+    # Optional fields for re-plan feature (override month_of_travel + trip_duration_days)
+    start_date: str | None = None  # e.g., "2026-03-07" (ISO format)
+    end_date: str | None = None  # e.g., "2026-03-14"

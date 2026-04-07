@@ -56,7 +56,7 @@ async def _search_hotels_for_city(
     # Resolve photo URLs
     for h in hotels_raw:
         if h.get("photo_reference") and not h.get("photo_url"):
-            h["photo_url"] = await get_photo_url(h["photo_reference"])
+            h["photo_url"] = get_photo_url(h["photo_reference"])  # Not async
 
     # Step 2: Tavily for pricing
     price_query = f"best {tier} hotels {city} {month} 2026 price per night {budget_currency}"
