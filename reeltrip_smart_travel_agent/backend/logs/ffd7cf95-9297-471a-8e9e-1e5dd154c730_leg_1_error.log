@@ -1,0 +1,9 @@
+Traceback (most recent call last):
+  File "C:\Users\BILAL BUDDI\OneDrive\Documents\new_sem6_mniproject\reeltrip-travel-new\backend\flight_agent_server.py", line 990, in flight_agent_thread
+    run_full_booking_flow(driver, payload, session_id)
+  File "C:\Users\BILAL BUDDI\OneDrive\Documents\new_sem6_mniproject\reeltrip-travel-new\backend\flight_agent_server.py", line 928, in run_full_booking_flow
+    outbound_result = step_select_outbound_flight(driver, payload, session_id, flight_id)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BILAL BUDDI\OneDrive\Documents\new_sem6_mniproject\reeltrip-travel-new\backend\flight_agent_server.py", line 677, in step_select_outbound_flight
+    raise Exception(
+Exception: Could not click 'Select flight' button. Check debug_html/outbound_after_row_click*.html for current button HTML.
