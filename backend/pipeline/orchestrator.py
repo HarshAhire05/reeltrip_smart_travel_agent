@@ -202,7 +202,7 @@ async def run_pipeline(url: str) -> AsyncGenerator[dict, None]:
             # Resolve photo URLs for any remaining places
             for place in all_places:
                 if place.get("photo_reference") and not place.get("photo_url"):
-                    place["photo_url"] = await get_photo_url(place["photo_reference"])
+                    place["photo_url"] = get_photo_url(place["photo_reference"])
 
             highlights = await generate_highlights(all_places)
 

@@ -126,7 +126,7 @@ async def validate_and_enrich_locations(content_analysis: dict) -> dict | None:
     all_places = validated_places + nearby_attractions + nearby_restaurants + nearby_hotels
     for place in all_places:
         if place.get("photo_reference") and not place.get("photo_url"):
-            place["photo_url"] = await get_photo_url(place["photo_reference"])
+            place["photo_url"] = get_photo_url(place["photo_reference"])
 
     return {
         "primary_country": primary_country,
