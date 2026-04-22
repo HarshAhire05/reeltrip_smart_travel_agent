@@ -33,23 +33,38 @@ export function EditTripPanelContainer() {
   const handleReplan = useCallback(
     async (updatedPreferences: UserPreferences, fields: string[]) => {
       // Derive sessionId from URL if not in store
-      const effectiveSessionId = sessionId || (typeof window !== 'undefined' ? window.location.pathname.split('/')[2] : null);
-      
+      const effectiveSessionId =
+        sessionId ||
+        (typeof window !== "undefined"
+          ? window.location.pathname.split("/")[2]
+          : null);
+
       // Derive selectedCities from itinerary if not in store
-      const effectiveCities = selectedCities?.length > 0 ? selectedCities : (itinerary?.destination_cities || []);
-      
+      const effectiveCities =
+        selectedCities?.length > 0
+          ? selectedCities
+          : itinerary?.destination_cities || [];
+
       // Use effective preferences (from store or derived from itinerary)
-      const effectivePreferences = preferences || (itinerary ? {
-        total_budget: itinerary.budget_breakdown.total_budget_inr || 50000,
-        currency: "INR",
-        number_of_travelers: itinerary.total_travelers || 2,
-        month_of_travel: new Date(itinerary.start_date).toLocaleString('en', { month: 'long' }),
-        travel_styles: ["relaxation"],
-        dietary_preferences: "none",
-        traveling_with: "partner" as const,
-        accommodation_tier: "mid-range" as const,
-        additional_notes: "",
-      } : null);
+      const effectivePreferences =
+        preferences ||
+        (itinerary
+          ? {
+              total_budget:
+                (itinerary.budget_breakdown as any)?.total_budget_inr || 50000,
+              currency: "INR",
+              number_of_travelers: itinerary.total_travelers || 2,
+              month_of_travel: new Date(itinerary.start_date).toLocaleString(
+                "en",
+                { month: "long" },
+              ),
+              travel_styles: ["relaxation"],
+              dietary_preferences: "none",
+              traveling_with: "partner" as const,
+              accommodation_tier: "mid-range" as const,
+              additional_notes: "",
+            }
+          : null);
 
       if (!effectiveSessionId || !itinerary || !effectivePreferences) {
         toast.error("Missing required data for re-plan");
@@ -191,7 +206,7 @@ export function EditTripPanelContainer() {
   console.log("[EditTripPanelContainer] Rendering edit panel", {
     hasPreferences: !!preferences,
     hasItinerary: !!itinerary,
-    hasSessionId: !!sessionId
+    hasSessionId: !!sessionId,
   });
 
   // If preferences are missing, we can still show the button
