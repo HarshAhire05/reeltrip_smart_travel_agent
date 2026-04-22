@@ -47,6 +47,7 @@ export function PreferenceForm() {
     setPreferences,
     setSelectedCities,
     setShowCitySelector,
+    setPassengerContact,
   } = useStore();
 
   const [form, setForm] = useState({
@@ -62,6 +63,13 @@ export function PreferenceForm() {
     home_city: "",
     home_country: "",
     additional_notes: "",
+  });
+
+  // Passenger contact info for zero-re-entry flight booking
+  const [contact, setContact] = useState({
+    name: "",
+    email: "",
+    phone: "",
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -104,6 +112,15 @@ export function PreferenceForm() {
       home_country: form.home_country || "India",
     };
     setPreferences(prefs);
+    // Store passenger contact for zero-re-entry flight booking
+    if (contact.name || contact.email || contact.phone) {
+      setPassengerContact({
+        name: contact.name,
+        email: contact.email,
+        phone: contact.phone,
+        num_people: form.number_of_travelers,
+      });
+    }
     setSelectedCities([primaryCity]);
     setShowCitySelector(true);
   };
@@ -381,6 +398,58 @@ export function PreferenceForm() {
             className="mt-2 border-glass-border bg-bg-secondary text-text-primary input-glow resize-none"
             rows={3}
           />
+        </div>
+
+        {/* Passenger Contact (for flight booking — optional) */}
+        <div className="border-t border-glass-border pt-4">
+          <Label className="text-text-primary text-sm font-semibold">
+            ✈️ Passenger Details{" "}
+            <span className="text-text-secondary font-normal text-xs">
+              (optional — used to auto-fill flight booking)
+            </span>
+          </Label>
+          <div className="grid grid-cols-1 gap-3 mt-3">
+            <div>
+              <Label className="text-text-secondary text-xs">Full Name</Label>
+              <Input
+                id="passenger-name"
+                value={contact.name}
+                onChange={(e) =>
+                  setContact((p) => ({ ...p, name: e.target.value }))
+                }
+                placeholder="e.g. Rahul Sharma"
+                className="mt-1 border-glass-border bg-bg-secondary text-text-primary input-glow"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-text-secondary text-xs">Email</Label>
+                <Input
+                  id="passenger-email"
+                  type="email"
+                  value={contact.email}
+                  onChange={(e) =>
+                    setContact((p) => ({ ...p, email: e.target.value }))
+                  }
+                  placeholder="rahul@example.com"
+                  className="mt-1 border-glass-border bg-bg-secondary text-text-primary input-glow"
+                />
+              </div>
+              <div>
+                <Label className="text-text-secondary text-xs">Phone</Label>
+                <Input
+                  id="passenger-phone"
+                  type="tel"
+                  value={contact.phone}
+                  onChange={(e) =>
+                    setContact((p) => ({ ...p, phone: e.target.value }))
+                  }
+                  placeholder="9876543210"
+                  className="mt-1 border-glass-border bg-bg-secondary text-text-primary input-glow"
+                />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

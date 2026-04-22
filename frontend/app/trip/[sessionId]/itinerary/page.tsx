@@ -149,6 +149,8 @@ export default function ItineraryPage() {
             <ReservationsTab
               flights={itinerary.flights ?? []}
               hotels={itinerary.hotels ?? []}
+              itineraryStartDate={itinerary.start_date}
+              itineraryEndDate={itinerary.end_date}
             />
           )}
 

@@ -16,6 +16,7 @@ import type {
   InputMode,
   IntentClassification,
   ClarificationOption,
+  PassengerContactInfo,
 } from "./types";
 
 interface ReelTripState {
@@ -101,6 +102,9 @@ interface ReelTripState {
   // Phase 5: Itinerary UI
   activeTab: string;
 
+  // Flight Agent Integration — passenger contact (zero re-entry)
+  passengerContact: PassengerContactInfo | null;
+
   // Existing actions
   setUrl: (url: string) => void;
   setTextInput: (text: string) => void;
@@ -144,6 +148,9 @@ interface ReelTripState {
   updateReplanAgentStatus: (progress: AgentProgress) => void;
   setReplanning: (val: boolean) => void;
   clearVersions: () => void;
+
+  // Flight Agent actions
+  setPassengerContact: (contact: PassengerContactInfo) => void;
 }
 
 const initialState = {
@@ -199,6 +206,8 @@ const initialState = {
   isReplanning: false,
   replanAgentStatuses: [] as AgentProgress[],
   changedFields: [] as string[],
+  // Flight Agent
+  passengerContact: null as PassengerContactInfo | null,
 };
 
 export const useStore = create<ReelTripState>((set) => ({
@@ -383,6 +392,9 @@ export const useStore = create<ReelTripState>((set) => ({
   setReplanning: (val) => set({ isReplanning: val, replanAgentStatuses: val ? [] : [] }),
 
   clearVersions: () => set({ itineraryVersions: [], originalPreferences: null }),
+
+  // Flight Agent actions
+  setPassengerContact: (contact) => set({ passengerContact: contact }),
 }));
 
 // Separate persisted store for version history (sessionStorage)

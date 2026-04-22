@@ -125,6 +125,7 @@ export default function LandingPage() {
               }}
               placeholder="Instagram, YouTube, or TikTok URL..."
               className="border-glass-border bg-bg-secondary/60 text-text-primary placeholder:text-text-secondary/60 input-glow"
+              suppressHydrationWarning
             />
           </div>
 
@@ -150,6 +151,7 @@ export default function LandingPage() {
               placeholder='e.g., "I want to visit Dubai" or "Show me beaches in Thailand"'
               className="border-glass-border bg-bg-secondary/60 text-text-primary placeholder:text-text-secondary/60 input-glow min-h-[100px] resize-none"
               rows={3}
+              suppressHydrationWarning
             />
           </div>
 
@@ -158,6 +160,7 @@ export default function LandingPage() {
             type="submit"
             className="accent-gradient w-full gap-2 font-semibold text-white shadow-lg shadow-accent-purple/20 hover:opacity-90"
             size="lg"
+            suppressHydrationWarning
           >
             Plan My Trip
             <ArrowRight className="h-4 w-4" />

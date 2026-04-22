@@ -8,9 +8,13 @@ import type { FlightReservation, HotelReservation } from "@/lib/types";
 export function ReservationsTab({
   flights,
   hotels,
+  itineraryStartDate,
+  itineraryEndDate,
 }: {
   flights: FlightReservation[];
   hotels: HotelReservation[];
+  itineraryStartDate?: string;
+  itineraryEndDate?: string;
 }) {
   const flightList = flights ?? [];
   const hotelList = hotels ?? [];
@@ -33,6 +37,9 @@ export function ReservationsTab({
                 key={`${f.from_airport_code}-${f.to_airport_code}-${i}`}
                 flight={f}
                 index={i}
+                flightLegIndex={i}
+                itineraryStartDate={itineraryStartDate}
+                itineraryEndDate={itineraryEndDate}
               />
             ))}
           </div>

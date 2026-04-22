@@ -347,3 +347,36 @@ export interface ChatMessage {
   content: string;
   timestamp: number;
 }
+
+// --- Flight Agent Integration ---
+
+export interface PassengerContactInfo {
+  name: string;
+  email: string;
+  phone: string;
+  num_people: number;
+}
+
+export type FlightBookingStatus =
+  | "idle"
+  | "starting"
+  | "initializing"
+  | "opening_browser"
+  | "opening_google_flights"
+  | "searching_flights"
+  | "filling_cities"
+  | "filling_route_details"
+  | "selecting_date"
+  | "setting_travel_date"
+  | "picking_cheapest"
+  | "selecting_best_option"
+  | "proceeding_to_booking"
+  | "booking_page_open"
+  | "error";
+
+export interface FlightStatusResponse {
+  status: FlightBookingStatus;
+  message: string;
+  error_detail: string | null;
+  booking_url?: string | null;
+}

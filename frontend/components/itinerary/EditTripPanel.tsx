@@ -228,22 +228,27 @@ export function EditTripPanel({ onReplan, isReplanning }: EditTripPanelProps) {
 
   return (
     <>
+      {/* Floating Action Button - Always visible */}
+      <motion.div
+        role="button"
+        tabIndex={0}
+        aria-label="Edit trip details"
+        onClick={() => setOpen(true)}
+        onKeyDown={(e) => e.key === "Enter" && setOpen(true)}
+        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-gradient-to-r from-accent-purple to-accent-pink px-6 py-3.5 text-base font-bold text-white shadow-2xl shadow-accent-purple/40 transition-all hover:scale-105 hover:shadow-accent-purple/60 cursor-pointer"
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ delay: 0.5, type: "spring", stiffness: 200 }}
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        suppressHydrationWarning
+      >
+        <span className="text-xl">✏️</span>
+        <span className="hidden sm:inline">Edit Trip Details</span>
+        <span className="sm:hidden">Edit</span>
+      </motion.div>
+
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetTrigger asChild>
-          {/* Floating Action Button - Always visible */}
-          <motion.button
-            className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-gradient-to-r from-accent-purple to-accent-pink px-6 py-3.5 text-base font-bold text-white shadow-2xl shadow-accent-purple/40 transition-all hover:scale-105 hover:shadow-accent-purple/60"
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.5, type: "spring", stiffness: 200 }}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            <span className="text-xl">✏️</span>
-            <span className="hidden sm:inline">Edit Trip Details</span>
-            <span className="sm:hidden">Edit</span>
-          </motion.button>
-        </SheetTrigger>
         <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
           <SheetHeader>
             <SheetTitle>Edit Trip Details</SheetTitle>

@@ -1,0 +1,13 @@
+Traceback (most recent call last):
+  File "C:\Users\BILAL BUDDI\OneDrive\Documents\new_sem6_mniproject\reeltrip-travel-new\backend\flight_agent_server.py", line 556, in flight_agent_thread
+    run_full_booking_flow(driver, payload, session_id)
+  File "C:\Users\BILAL BUDDI\OneDrive\Documents\new_sem6_mniproject\reeltrip-travel-new\backend\flight_agent_server.py", line 507, in run_full_booking_flow
+    result = step_select_outbound_flight(driver, payload, session_id, flight_id)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BILAL BUDDI\OneDrive\Documents\new_sem6_mniproject\reeltrip-travel-new\backend\flight_agent_server.py", line 360, in step_select_outbound_flight
+    outbound_rows = wait.until(
+                    ^^^^^^^^^^^
+  File "C:\Users\BILAL BUDDI\OneDrive\Documents\new_sem6_mniproject\reeltrip-travel-new\backend\venv\Lib\site-packages\selenium\webdriver\support\wait.py", line 121, in until
+    raise TimeoutException(message, screen, stacktrace)
+selenium.common.exceptions.TimeoutException: Message: 
+

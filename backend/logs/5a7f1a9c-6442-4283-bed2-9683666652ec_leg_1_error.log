@@ -1,0 +1,9 @@
+Traceback (most recent call last):
+  File "C:\Users\BILAL BUDDI\OneDrive\Documents\new_sem6_mniproject\reeltrip-travel-new\backend\flight_agent_server.py", line 976, in flight_agent_thread
+    run_full_booking_flow(driver, payload, session_id)
+  File "C:\Users\BILAL BUDDI\OneDrive\Documents\new_sem6_mniproject\reeltrip-travel-new\backend\flight_agent_server.py", line 914, in run_full_booking_flow
+    outbound_result = step_select_outbound_flight(driver, payload, session_id, flight_id)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\BILAL BUDDI\OneDrive\Documents\new_sem6_mniproject\reeltrip-travel-new\backend\flight_agent_server.py", line 687, in step_select_outbound_flight
+    raise Exception(
+Exception: Could not find 'Select flight' button after expanding outbound row. Check debug_screenshots/outbound_after_chevron_click.png
