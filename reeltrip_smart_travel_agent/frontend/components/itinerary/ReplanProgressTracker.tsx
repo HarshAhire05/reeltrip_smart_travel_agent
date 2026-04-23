@@ -82,7 +82,7 @@ export function ReplanProgressTracker({
   };
 
   const allComplete = sortedAgents.every(
-    (agent) => agent.status === "complete" || agent.status === "skipped",
+    (agent) => agent.status === "complete",
   );
 
   return (
@@ -113,11 +113,6 @@ export function ReplanProgressTracker({
                   <span className="font-medium text-sm">
                     {AGENT_DISPLAY_NAMES[agent.agent] || agent.agent}
                   </span>
-                  {agent.status === "skipped" && (
-                    <span className="text-xs text-muted-foreground italic">
-                      (unchanged)
-                    </span>
-                  )}
                 </div>
                 <p className={`text-xs mt-0.5 ${getStatusColor(agent.status)}`}>
                   {agent.message}
