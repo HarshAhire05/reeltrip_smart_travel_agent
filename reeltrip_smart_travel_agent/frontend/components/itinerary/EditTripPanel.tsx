@@ -29,7 +29,6 @@ import { useStore } from "@/lib/store";
 import { calculateChangedFields, fieldValidators } from "@/lib/validation";
 import type { UserPreferences } from "@/lib/types";
 
-
 const MONTHS = [
   "January",
   "February",
@@ -87,7 +86,8 @@ interface EditTripPanelProps {
 }
 
 export function EditTripPanel({ onReplan, isReplanning }: EditTripPanelProps) {
-  const { preferences, originalPreferences, selectedCities, itinerary } = useStore();
+  const { preferences, originalPreferences, selectedCities, itinerary } =
+    useStore();
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<UserPreferences | null>(null);
@@ -98,23 +98,34 @@ export function EditTripPanel({ onReplan, isReplanning }: EditTripPanelProps) {
   >(null);
 
   // Derive preferences from itinerary if not in store
-  const effectivePreferences = preferences || (itinerary ? {
-    total_budget: itinerary.budget_breakdown.total_budget_inr || 50000,
-    currency: "INR",
-    number_of_travelers: itinerary.total_travelers || 2,
-    month_of_travel: new Date(itinerary.start_date).toLocaleString('en', { month: 'long' }),
-    travel_styles: ["relaxation"],
-    dietary_preferences: "none",
-    traveling_with: "partner" as const,
-    accommodation_tier: "mid-range" as const,
-    additional_notes: "",
-  } : null);
+  const effectivePreferences =
+    preferences ||
+    (itinerary
+      ? {
+          total_budget:
+            (itinerary.budget_breakdown as any)?.total_budget_inr || 50000,
+          trip_duration_days: itinerary.total_days || 3,
+          budget_currency: "INR",
+          must_include_places: [],
+          home_city: "Mumbai",
+          home_country: "India",
+          number_of_travelers: itinerary.total_travelers || 2,
+          month_of_travel: new Date(itinerary.start_date).toLocaleString("en", {
+            month: "long",
+          }),
+          travel_styles: ["relaxation"],
+          dietary_preferences: [],
+          traveling_with: "partner" as const,
+          accommodation_tier: "mid-range" as const,
+          additional_notes: "",
+        }
+      : null);
 
   console.log("[EditTripPanel] Render check:", {
     hasPreferences: !!preferences,
     hasItinerary: !!itinerary,
     hasEffectivePreferences: !!effectivePreferences,
-    willRender: !!effectivePreferences || !!form
+    willRender: !!effectivePreferences || !!form,
   });
 
   // Initialize form when panel opens
@@ -132,10 +143,9 @@ export function EditTripPanel({ onReplan, isReplanning }: EditTripPanelProps) {
   }
 
   // Only calculate changes if form is initialized (panel has been opened)
-  const changedFields = form ? calculateChangedFields(
-    originalPreferences || effectivePreferences,
-    form,
-  ) : [];
+  const changedFields = form
+    ? calculateChangedFields(originalPreferences || effectivePreferences, form)
+    : [];
 
   const hasChanges = changedFields.length > 0;
 
@@ -158,70 +168,61 @@ export function EditTripPanel({ onReplan, isReplanning }: EditTripPanelProps) {
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
-
+    if (!form) {
+      newErrors.general = "Form is not initialized.";
+      setErrors(newErrors);
+      return false;
+    }
     const budgetError = fieldValidators.budget(form.total_budget);
     if (budgetError) newErrors.total_budget = budgetError;
-
     const travelersError = fieldValidators.travelers(form.number_of_travelers);
     if (travelersError) newErrors.number_of_travelers = travelersError;
-
     const durationError = fieldValidators.duration(form.trip_duration_days);
     if (durationError) newErrors.trip_duration_days = durationError;
-
     const homeCityError = fieldValidators.requiredString(
       form.home_city,
       "Home city",
     );
     if (homeCityError) newErrors.home_city = homeCityError;
-
     const homeCountryError = fieldValidators.requiredString(
       form.home_country,
       "Home country",
     );
     if (homeCountryError) newErrors.home_country = homeCountryError;
-
     const stylesError = fieldValidators.requiredArray(
       form.travel_styles,
       "Travel style",
     );
     if (stylesError) newErrors.travel_styles = stylesError;
-
-    // Date validation (if dates are provided)
-    if (form.start_date && form.end_date) {
-      const dateError = fieldValidators.dateRange(
-        form.start_date,
-        form.end_date,
-      );
-      if (dateError) newErrors.dates = dateError;
-    }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleReplan = () => {
+    if (!form) {
+      setErrors({ general: "Form is not initialized." });
+      return;
+    }
     if (!hasChanges) {
       setErrors({ general: "No changes detected" });
       return;
     }
-
     if (!validateForm()) {
       return;
     }
-
     // Check if destination changed
     const destinationChanged = changedFields.includes("destination");
     if (destinationChanged && pendingDestinationChange) {
       setShowDestinationModal(true);
       return;
     }
-
     // Proceed with re-plan
     setOpen(false);
     onReplan(form, changedFields);
   };
 
   const handleDestinationChangeConfirm = () => {
+    if (!form) return;
     setShowDestinationModal(false);
     setOpen(false);
     onReplan(form, changedFields);
@@ -264,365 +265,402 @@ export function EditTripPanel({ onReplan, isReplanning }: EditTripPanelProps) {
               Initializing form...
             </div>
           ) : (
-          <div className="space-y-6 py-6">{/* Budget */}
-            <div>
-              <Label htmlFor="budget">Total Budget</Label>
-              <div className="flex gap-2 mt-2">
-                <Select
-                  value={form.budget_currency}
-                  onValueChange={(val) =>
-                    setForm((p) => (p ? { ...p, budget_currency: val } : p))
-                  }
+            <div className="space-y-6 py-6">
+              {/* Budget */}
+              <div>
+                <Label htmlFor="budget">Total Budget</Label>
+                <div className="flex gap-2 mt-2">
+                  <Select
+                    value={form.budget_currency}
+                    onValueChange={(val) =>
+                      setForm((p) =>
+                        p
+                          ? { ...p, budget_currency: val ?? p.budget_currency }
+                          : p,
+                      )
+                    }
+                  >
+                    <SelectTrigger className="w-24">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CURRENCIES.map((currency) => (
+                        <SelectItem key={currency} value={currency}>
+                          {currency}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <ChangeBadge
+                    isChanged={changedFields.includes("total_budget")}
+                  >
+                    <Input
+                      id="budget"
+                      type="number"
+                      value={form.total_budget}
+                      onChange={(e) =>
+                        setForm((p) =>
+                          p
+                            ? {
+                                ...p,
+                                total_budget: parseFloat(e.target.value) || 0,
+                              }
+                            : p,
+                        )
+                      }
+                      className="flex-1"
+                    />
+                  </ChangeBadge>
+                </div>
+                {errors.total_budget && (
+                  <p className="text-xs text-destructive mt-1">
+                    {errors.total_budget}
+                  </p>
+                )}
+              </div>
+
+              {/* Accommodation Tier */}
+              <div>
+                <Label>Accommodation Tier</Label>
+                <ChangeBadge
+                  isChanged={changedFields.includes("accommodation_tier")}
                 >
-                  <SelectTrigger className="w-24">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CURRENCIES.map((currency) => (
-                      <SelectItem key={currency} value={currency}>
-                        {currency}
-                      </SelectItem>
+                  <div className="flex gap-2 mt-2 flex-wrap">
+                    {ACCOMMODATION_TIERS.map((tier) => (
+                      <Button
+                        key={tier}
+                        type="button"
+                        variant={
+                          form.accommodation_tier === tier
+                            ? "default"
+                            : "outline"
+                        }
+                        size="sm"
+                        onClick={() =>
+                          setForm((p) =>
+                            p ? { ...p, accommodation_tier: tier } : p,
+                          )
+                        }
+                        className="capitalize"
+                      >
+                        {tier}
+                      </Button>
                     ))}
-                  </SelectContent>
-                </Select>
-                <ChangeBadge isChanged={changedFields.includes("total_budget")}>
+                  </div>
+                </ChangeBadge>
+              </div>
+
+              {/* Number of Travelers */}
+              <div>
+                <Label htmlFor="number_of_travelers">Number of Travelers</Label>
+                <ChangeBadge
+                  isChanged={changedFields.includes("number_of_travelers")}
+                >
                   <Input
-                    id="budget"
+                    id="number_of_travelers"
                     type="number"
-                    value={form.total_budget}
-                    onChange={(e) =>
+                    min={1}
+                    max={20}
+                    value={form.number_of_travelers}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value) || 1;
                       setForm((p) =>
                         p
                           ? {
                               ...p,
-                              total_budget: parseFloat(e.target.value) || 0,
+                              number_of_travelers: Math.max(
+                                1,
+                                Math.min(20, val),
+                              ),
                             }
+                          : p,
+                      );
+                    }}
+                    className="mt-2"
+                    placeholder="e.g., 2"
+                  />
+                </ChangeBadge>
+                {errors.number_of_travelers && (
+                  <p className="text-xs text-destructive mt-1">
+                    {errors.number_of_travelers}
+                  </p>
+                )}
+              </div>
+
+              {/* Trip Duration */}
+              <div>
+                <Label htmlFor="trip_duration_days">Trip Duration (days)</Label>
+                <ChangeBadge
+                  isChanged={changedFields.includes("trip_duration_days")}
+                >
+                  <Input
+                    id="trip_duration_days"
+                    type="number"
+                    min={1}
+                    max={30}
+                    value={form.trip_duration_days}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value) || 1;
+                      setForm((p) =>
+                        p
+                          ? {
+                              ...p,
+                              trip_duration_days: Math.max(
+                                1,
+                                Math.min(30, val),
+                              ),
+                            }
+                          : p,
+                      );
+                    }}
+                    className="mt-2"
+                    placeholder="e.g., 7"
+                  />
+                </ChangeBadge>
+                {errors.trip_duration_days && (
+                  <p className="text-xs text-destructive mt-1">
+                    {errors.trip_duration_days}
+                  </p>
+                )}
+              </div>
+
+              {/* Traveling With */}
+              <div>
+                <Label>Traveling With</Label>
+                <ChangeBadge
+                  isChanged={changedFields.includes("traveling_with")}
+                >
+                  <div className="flex gap-2 mt-2 flex-wrap">
+                    {TRAVELING_WITH.map((type) => (
+                      <Button
+                        key={type}
+                        type="button"
+                        variant={
+                          form.traveling_with === type ? "default" : "outline"
+                        }
+                        size="sm"
+                        onClick={() =>
+                          setForm((p) =>
+                            p ? { ...p, traveling_with: type } : p,
+                          )
+                        }
+                        className="capitalize"
+                      >
+                        {type}
+                      </Button>
+                    ))}
+                  </div>
+                </ChangeBadge>
+              </div>
+
+              {/* Month of Travel */}
+              <div>
+                <Label htmlFor="month">Month of Travel</Label>
+                <ChangeBadge
+                  isChanged={changedFields.includes("month_of_travel")}
+                >
+                  <Select
+                    value={form.month_of_travel}
+                    onValueChange={(val) =>
+                      setForm((p) =>
+                        p
+                          ? { ...p, month_of_travel: val ?? p.month_of_travel }
                           : p,
                       )
                     }
-                    className="flex-1"
-                  />
+                  >
+                    <SelectTrigger className="mt-2">
+                      <SelectValue placeholder="Select month" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MONTHS.map((month) => (
+                        <SelectItem key={month} value={month}>
+                          {month}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </ChangeBadge>
               </div>
-              {errors.total_budget && (
-                <p className="text-xs text-destructive mt-1">
-                  {errors.total_budget}
-                </p>
-              )}
-            </div>
 
-            {/* Accommodation Tier */}
-            <div>
-              <Label>Accommodation Tier</Label>
-              <ChangeBadge
-                isChanged={changedFields.includes("accommodation_tier")}
-              >
-                <div className="flex gap-2 mt-2 flex-wrap">
-                  {ACCOMMODATION_TIERS.map((tier) => (
-                    <Button
-                      key={tier}
-                      type="button"
-                      variant={
-                        form.accommodation_tier === tier ? "default" : "outline"
-                      }
-                      size="sm"
-                      onClick={() =>
+              {/* Travel Styles */}
+              <div>
+                <Label>Travel Styles</Label>
+                <ChangeBadge
+                  isChanged={changedFields.includes("travel_styles")}
+                >
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {TRAVEL_STYLES.map((style) => (
+                      <Badge
+                        key={style}
+                        variant={
+                          form.travel_styles.includes(style)
+                            ? "default"
+                            : "outline"
+                        }
+                        className="cursor-pointer capitalize"
+                        onClick={() => toggleArrayField("travel_styles", style)}
+                      >
+                        {style}
+                      </Badge>
+                    ))}
+                  </div>
+                </ChangeBadge>
+                {errors.travel_styles && (
+                  <p className="text-xs text-destructive mt-1">
+                    {errors.travel_styles}
+                  </p>
+                )}
+              </div>
+
+              {/* Dietary Preferences */}
+              <div>
+                <Label>Dietary Preferences</Label>
+                <ChangeBadge
+                  isChanged={changedFields.includes("dietary_preferences")}
+                >
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {DIETARY_OPTIONS.map((option) => (
+                      <Badge
+                        key={option}
+                        variant={
+                          form.dietary_preferences.includes(option)
+                            ? "default"
+                            : "outline"
+                        }
+                        className="cursor-pointer capitalize"
+                        onClick={() =>
+                          toggleArrayField("dietary_preferences", option)
+                        }
+                      >
+                        {option}
+                      </Badge>
+                    ))}
+                  </div>
+                </ChangeBadge>
+              </div>
+
+              {/* Home City & Country */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="home_city">Home City</Label>
+                  <ChangeBadge isChanged={changedFields.includes("home_city")}>
+                    <Input
+                      id="home_city"
+                      value={form.home_city}
+                      onChange={(e) =>
                         setForm((p) =>
-                          p ? { ...p, accommodation_tier: tier } : p,
+                          p ? { ...p, home_city: e.target.value } : p,
                         )
                       }
-                      className="capitalize"
-                    >
-                      {tier}
-                    </Button>
-                  ))}
+                      className="mt-2"
+                    />
+                  </ChangeBadge>
+                  {errors.home_city && (
+                    <p className="text-xs text-destructive mt-1">
+                      {errors.home_city}
+                    </p>
+                  )}
                 </div>
-              </ChangeBadge>
-            </div>
-
-            {/* Number of Travelers */}
-            <div>
-              <Label htmlFor="number_of_travelers">Number of Travelers</Label>
-              <ChangeBadge
-                isChanged={changedFields.includes("number_of_travelers")}
-              >
-                <Input
-                  id="number_of_travelers"
-                  type="number"
-                  min={1}
-                  max={20}
-                  value={form.number_of_travelers}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value) || 1;
-                    setForm((p) =>
-                      p ? { ...p, number_of_travelers: Math.max(1, Math.min(20, val)) } : p
-                    );
-                  }}
-                  className="mt-2"
-                  placeholder="e.g., 2"
-                />
-              </ChangeBadge>
-              {errors.number_of_travelers && (
-                <p className="text-xs text-destructive mt-1">
-                  {errors.number_of_travelers}
-                </p>
-              )}
-            </div>
-
-            {/* Trip Duration */}
-            <div>
-              <Label htmlFor="trip_duration_days">Trip Duration (days)</Label>
-              <ChangeBadge
-                isChanged={changedFields.includes("trip_duration_days")}
-              >
-                <Input
-                  id="trip_duration_days"
-                  type="number"
-                  min={1}
-                  max={30}
-                  value={form.trip_duration_days}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value) || 1;
-                    setForm((p) =>
-                      p ? { ...p, trip_duration_days: Math.max(1, Math.min(30, val)) } : p
-                    );
-                  }}
-                  className="mt-2"
-                  placeholder="e.g., 7"
-                />
-              </ChangeBadge>
-              {errors.trip_duration_days && (
-                <p className="text-xs text-destructive mt-1">
-                  {errors.trip_duration_days}
-                </p>
-              )}
-            </div>
-
-            {/* Traveling With */}
-            <div>
-              <Label>Traveling With</Label>
-              <ChangeBadge isChanged={changedFields.includes("traveling_with")}>
-                <div className="flex gap-2 mt-2 flex-wrap">
-                  {TRAVELING_WITH.map((type) => (
-                    <Button
-                      key={type}
-                      type="button"
-                      variant={
-                        form.traveling_with === type ? "default" : "outline"
+                <div>
+                  <Label htmlFor="home_country">Home Country</Label>
+                  <ChangeBadge
+                    isChanged={changedFields.includes("home_country")}
+                  >
+                    <Input
+                      id="home_country"
+                      value={form.home_country}
+                      onChange={(e) =>
+                        setForm((p) =>
+                          p ? { ...p, home_country: e.target.value } : p,
+                        )
                       }
-                      size="sm"
-                      onClick={() =>
-                        setForm((p) => (p ? { ...p, traveling_with: type } : p))
-                      }
-                      className="capitalize"
-                    >
-                      {type}
-                    </Button>
-                  ))}
+                      className="mt-2"
+                    />
+                  </ChangeBadge>
+                  {errors.home_country && (
+                    <p className="text-xs text-destructive mt-1">
+                      {errors.home_country}
+                    </p>
+                  )}
                 </div>
-              </ChangeBadge>
-            </div>
+              </div>
 
-            {/* Month of Travel */}
-            <div>
-              <Label htmlFor="month">Month of Travel</Label>
-              <ChangeBadge
-                isChanged={changedFields.includes("month_of_travel")}
-              >
-                <Select
-                  value={form.month_of_travel}
-                  onValueChange={(val) =>
-                    setForm((p) => (p ? { ...p, month_of_travel: val } : p))
-                  }
+              {/* Special Requests */}
+              <div>
+                <Label htmlFor="additional_notes">Special Requests</Label>
+                <ChangeBadge
+                  isChanged={changedFields.includes("additional_notes")}
                 >
-                  <SelectTrigger className="mt-2">
-                    <SelectValue placeholder="Select month" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MONTHS.map((month) => (
-                      <SelectItem key={month} value={month}>
-                        {month}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </ChangeBadge>
-            </div>
-
-            {/* Travel Styles */}
-            <div>
-              <Label>Travel Styles</Label>
-              <ChangeBadge isChanged={changedFields.includes("travel_styles")}>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {TRAVEL_STYLES.map((style) => (
-                    <Badge
-                      key={style}
-                      variant={
-                        form.travel_styles.includes(style)
-                          ? "default"
-                          : "outline"
-                      }
-                      className="cursor-pointer capitalize"
-                      onClick={() => toggleArrayField("travel_styles", style)}
-                    >
-                      {style}
-                    </Badge>
-                  ))}
-                </div>
-              </ChangeBadge>
-              {errors.travel_styles && (
-                <p className="text-xs text-destructive mt-1">
-                  {errors.travel_styles}
-                </p>
-              )}
-            </div>
-
-            {/* Dietary Preferences */}
-            <div>
-              <Label>Dietary Preferences</Label>
-              <ChangeBadge
-                isChanged={changedFields.includes("dietary_preferences")}
-              >
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {DIETARY_OPTIONS.map((option) => (
-                    <Badge
-                      key={option}
-                      variant={
-                        form.dietary_preferences.includes(option)
-                          ? "default"
-                          : "outline"
-                      }
-                      className="cursor-pointer capitalize"
-                      onClick={() =>
-                        toggleArrayField("dietary_preferences", option)
-                      }
-                    >
-                      {option}
-                    </Badge>
-                  ))}
-                </div>
-              </ChangeBadge>
-            </div>
-
-            {/* Home City & Country */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="home_city">Home City</Label>
-                <ChangeBadge isChanged={changedFields.includes("home_city")}>
-                  <Input
-                    id="home_city"
-                    value={form.home_city}
+                  <Textarea
+                    id="additional_notes"
+                    value={form.additional_notes}
                     onChange={(e) =>
                       setForm((p) =>
-                        p ? { ...p, home_city: e.target.value } : p,
+                        p ? { ...p, additional_notes: e.target.value } : p,
                       )
                     }
                     className="mt-2"
+                    rows={3}
+                    placeholder="Any special requests or preferences..."
                   />
                 </ChangeBadge>
-                {errors.home_city && (
-                  <p className="text-xs text-destructive mt-1">
-                    {errors.home_city}
-                  </p>
-                )}
               </div>
-              <div>
-                <Label htmlFor="home_country">Home Country</Label>
-                <ChangeBadge isChanged={changedFields.includes("home_country")}>
-                  <Input
-                    id="home_country"
-                    value={form.home_country}
-                    onChange={(e) =>
-                      setForm((p) =>
-                        p ? { ...p, home_country: e.target.value } : p,
-                      )
-                    }
-                    className="mt-2"
-                  />
-                </ChangeBadge>
-                {errors.home_country && (
-                  <p className="text-xs text-destructive mt-1">
-                    {errors.home_country}
-                  </p>
-                )}
-              </div>
-            </div>
 
-            {/* Special Requests */}
-            <div>
-              <Label htmlFor="additional_notes">Special Requests</Label>
-              <ChangeBadge
-                isChanged={changedFields.includes("additional_notes")}
-              >
-                <Textarea
-                  id="additional_notes"
-                  value={form.additional_notes}
-                  onChange={(e) =>
-                    setForm((p) =>
-                      p ? { ...p, additional_notes: e.target.value } : p,
-                    )
-                  }
-                  className="mt-2"
-                  rows={3}
-                  placeholder="Any special requests or preferences..."
+              {/* Destination (read-only) */}
+              <div>
+                <Label>Destination</Label>
+                <Input
+                  value={selectedCities.join(", ") || "Not set"}
+                  disabled
+                  className="mt-2 bg-muted"
                 />
-              </ChangeBadge>
-            </div>
-
-            {/* Destination (read-only) */}
-            <div>
-              <Label>Destination</Label>
-              <Input
-                value={selectedCities.join(", ") || "Not set"}
-                disabled
-                className="mt-2 bg-muted"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Changing destination will rebuild your full itinerary
-              </p>
-            </div>
-
-            {/* Change Summary */}
-            <ChangeSummary
-              changedFields={changedFields}
-              originalPreferences={originalPreferences || preferences}
-              updatedPreferences={form}
-              mode="inline"
-            />
-
-            {/* Error Message */}
-            {errors.general && (
-              <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-lg">
-                {errors.general}
+                <p className="text-xs text-muted-foreground mt-1">
+                  Changing destination will rebuild your full itinerary
+                </p>
               </div>
-            )}
 
-            {/* Action Buttons */}
-            <div className="flex gap-3 pt-4 border-t">
-              <Button
-                variant="outline"
-                onClick={() => setOpen(false)}
-                className="flex-1"
-                disabled={isReplanning}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleReplan}
-                className="flex-1"
-                disabled={!hasChanges || isReplanning}
-              >
-                {isReplanning ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Re-Planning...
-                  </>
-                ) : (
-                  "Re-Plan Itinerary"
-                )}
-              </Button>
+              {/* Change Summary */}
+              <ChangeSummary
+                changedFields={changedFields}
+                originalPreferences={originalPreferences || preferences}
+                updatedPreferences={form}
+                mode="inline"
+              />
+
+              {/* Error Message */}
+              {errors.general && (
+                <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-lg">
+                  {errors.general}
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-4 border-t">
+                <Button
+                  variant="outline"
+                  onClick={() => setOpen(false)}
+                  className="flex-1"
+                  disabled={isReplanning}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleReplan}
+                  className="flex-1"
+                  disabled={!hasChanges || isReplanning}
+                >
+                  {isReplanning ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Re-Planning...
+                    </>
+                  ) : (
+                    "Re-Plan Itinerary"
+                  )}
+                </Button>
+              </div>
             </div>
-          </div>
           )}
         </SheetContent>
       </Sheet>

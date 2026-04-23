@@ -8,7 +8,7 @@ import type { UserPreferences } from "@/lib/types";
 interface ChangeSummaryProps {
   changedFields: string[];
   originalPreferences: UserPreferences | null;
-  updatedPreferences: Partial<UserPreferences>;
+  updatedPreferences: Partial<UserPreferences> | null;
   mode?: "inline" | "banner";
 }
 
@@ -18,7 +18,11 @@ export function ChangeSummary({
   updatedPreferences,
   mode = "inline",
 }: ChangeSummaryProps) {
-  if (changedFields.length === 0) {
+  if (
+    changedFields.length === 0 ||
+    !originalPreferences ||
+    !updatedPreferences
+  ) {
     return null;
   }
 

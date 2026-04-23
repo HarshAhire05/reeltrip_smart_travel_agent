@@ -65,7 +65,7 @@ Console logs to help diagnose issues:
 2. Component derives preferences from itinerary data:
    ```javascript
    {
-     total_budget: itinerary.budget_breakdown.total_budget_inr,
+     total_budget: (itinerary.budget_breakdown as any)?.total_budget_inr || 50000,
      number_of_travelers: itinerary.total_travelers,
      month_of_travel: extracted from start_date,
      // ... other fields with defaults

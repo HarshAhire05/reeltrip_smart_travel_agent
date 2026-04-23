@@ -52,14 +52,18 @@ export function EditTripPanelContainer() {
           ? {
               total_budget:
                 (itinerary.budget_breakdown as any)?.total_budget_inr || 50000,
-              currency: "INR",
+              trip_duration_days: itinerary.total_days || 3,
+              budget_currency: "INR",
+              must_include_places: [],
+              home_city: "Mumbai",
+              home_country: "India",
               number_of_travelers: itinerary.total_travelers || 2,
               month_of_travel: new Date(itinerary.start_date).toLocaleString(
                 "en",
                 { month: "long" },
               ),
               travel_styles: ["relaxation"],
-              dietary_preferences: "none",
+              dietary_preferences: [],
               traveling_with: "partner" as const,
               accommodation_tier: "mid-range" as const,
               additional_notes: "",
@@ -79,7 +83,7 @@ export function EditTripPanelContainer() {
       const payload = {
         session_id: effectiveSessionId,
         original_params: originalPreferences || effectivePreferences,
-        updated_params: updatedPreferences,
+        updated_params: updatedPreferences || effectivePreferences,
         changed_fields: fields,
         existing_itinerary: itinerary,
         selected_cities: effectiveCities,
