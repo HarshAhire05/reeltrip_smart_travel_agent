@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+python-dotenv
+openai
+yt-dlp
+langgraph
+langchain-openai
+langchain-core
+tavily-python
+httpx
+supabase
+python-multipart
+aiofiles
+Pillow
